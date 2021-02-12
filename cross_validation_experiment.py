@@ -49,11 +49,11 @@ def denormalize_y(image):
     return image
 
 
-def load_images(images_list, image_type, image_size, partition=True):
+def load_images(images_list, image_type, input_size, partition=True):
 
     # load partition images
     if partition:
-        images = np.zeros((len(images_list) * 3, image_size, image_size, 1), np.float32)
+        images = np.zeros((len(images_list) * 3, input_size, input_size, 1), np.float32)
         for i, image_name in enumerate(images_list):
             if image_type == 0:  # image
                 image = cv2.imread(os.path.join(IMAGE_DIR, image_name[0]), cv2.IMREAD_GRAYSCALE)
@@ -67,13 +67,13 @@ def load_images(images_list, image_type, image_size, partition=True):
                 L_partition, R_partition, B_partition = create_KUB_partitions(image, KUB_map)
                 # L_partition, R_partition, B_partition = create_KUB_partitions_old(image)
 
-                L_partition = cv2.resize(normalize_x(L_partition), (image_size, image_size))
+                L_partition = cv2.resize(normalize_x(L_partition), (input_size, input_size))
                 images[3*i] = L_partition[:, :, np.newaxis]
 
-                R_partition = cv2.resize(normalize_x(R_partition), (image_size, image_size))
+                R_partition = cv2.resize(normalize_x(R_partition), (input_size, input_size))
                 images[3*i + 1] = R_partition[:, :, np.newaxis]
 
-                B_partition = cv2.resize(normalize_x(B_partition), (image_size, image_size))
+                B_partition = cv2.resize(normalize_x(B_partition), (input_size, input_size))
                 images[3*i + 2] = B_partition[:, :, np.newaxis]
 
                 # if s < 20:
@@ -96,13 +96,13 @@ def load_images(images_list, image_type, image_size, partition=True):
                     L_partition, R_partition, B_partition = create_KUB_partitions(image, KUB_map)
                     # L_partition, R_partition, B_partition = create_KUB_partitions_old(image)
 
-                    L_partition = cv2.resize(normalize_y(L_partition), (image_size, image_size))
+                    L_partition = cv2.resize(normalize_y(L_partition), (input_size, input_size))
                     images[3 * i] = L_partition[:, :, np.newaxis]
 
-                    R_partition = cv2.resize(normalize_y(R_partition), (image_size, image_size))
+                    R_partition = cv2.resize(normalize_y(R_partition), (input_size, input_size))
                     images[3 * i + 1] = R_partition[:, :, np.newaxis]
 
-                    B_partition = cv2.resize(normalize_y(B_partition), (image_size, image_size))
+                    B_partition = cv2.resize(normalize_y(B_partition), (input_size, input_size))
                     images[3 * i + 2] = B_partition[:, :, np.newaxis]
 
                     save_path = cfg.path['save_dir']['root_dir'] + os.sep + cfg.path['save_dir'][
@@ -114,18 +114,18 @@ def load_images(images_list, image_type, image_size, partition=True):
 
     # load full images
     else:
-        images = np.zeros((len(images_list), image_size, image_size, 1), np.float32)
+        images = np.zeros((len(images_list), input_size, input_size, 1), np.float32)
         for i, image_name in enumerate(images_list):
             if image_type == 0:  # image
                 image = cv2.imread(os.path.join(IMAGE_DIR, image_name[0]), cv2.IMREAD_GRAYSCALE)
-                image = cv2.resize(image, (image_size, image_size))
+                image = cv2.resize(image, (input_size, input_size))
                 image = image[:, :, np.newaxis]
                 images[i] = normalize_x(image)
 
             elif image_type == 1:  # mask
                 if image_name[2] == 1:    # sc
                     image = cv2.imread(os.path.join(MASK_DIR, image_name[1]), cv2.IMREAD_GRAYSCALE)
-                    image = cv2.resize(image, (image_size, image_size))
+                    image = cv2.resize(image, (input_size, input_size))
                     image = image[:, :, np.newaxis]
                     images[i] = normalize_y(image)
 
@@ -146,7 +146,6 @@ def stone_augmenting_generator(image, mask, stone_location_map, stone_num, prob_
     location_k = random.choice(np.argwhere(stone_location_map[:, :, 2] == 255))
     location_u = random.choice(np.argwhere(stone_location_map[:, :, 1] == 255))
     location_b = random.choice(np.argwhere(stone_location_map[:, :, 0] == 255))
-
 
     if prob_map:
         location_list = np.argwhere(stone_location_map > 0)       # probability map - indice
@@ -302,10 +301,10 @@ def image_mask_augmentation(image, mask, stone_location_map, datagen_methods, im
     # augmented_mask = cv2.resize(augmented_mask, (IMAGE_SIZE, IMAGE_SIZE))
 
     # save only fist 5 epochs
-    # if epoch <= 1 and save:
-    #     save_path = cfg.path['save_dir']['root_dir'] + os.sep + cfg.path['save_dir']['save_folder'] + os.sep + cross_val_folder
-    #     cv2.imwrite(save_path + '/augments/' + img_name[:-4] + '_' + str(epoch) + '_s' + str(stone_num) + '.png', augmented_image)
-    #     cv2.imwrite(save_path + '/augments_gt/' + img_name[:-4] + '_' + str(epoch) + '_s' + str(stone_num) + '.png', augmented_mask)
+    if epoch <= 1 and save:
+        save_path = cfg.path['save_dir']['root_dir'] + os.sep + cfg.path['save_dir']['save_folder'] + os.sep + cross_val_folder
+        cv2.imwrite(save_path + '/augments/' + img_name[:-4] + '_' + str(epoch) + '_s' + str(stone_num) + '.png', augmented_image)
+        cv2.imwrite(save_path + '/augments_gt/' + img_name[:-4] + '_' + str(epoch) + '_s' + str(stone_num) + '.png', augmented_mask)
 
     return augmented_image, augmented_mask, stone_location_map
 
@@ -412,14 +411,13 @@ def generator(sc_samples, sf_samples, batch_size, datagen_methods, shuffle_data,
                     save_path = cfg.path['save_dir']['root_dir'] + os.sep + cfg.path['save_dir'][
                         'save_folder'] + os.sep + cross_val_folder
 
-                    # if epoch == 1 and offset < 12:
-                    #     cv2.imwrite(save_path + '/partition/' + img_name[:-4] + '_L.png', denormalize_x(L_img))
-                    #     cv2.imwrite(save_path + '/partition_gt/' + img_name[:-4] + '_L.png', denormalize_y(L_gt))
-                    #     cv2.imwrite(save_path + '/partition/' + img_name[:-4] + '_R.png', denormalize_x(R_img))
-                    #     cv2.imwrite(save_path + '/partition_gt/' + img_name[:-4] + '_R.png', denormalize_y(R_gt))
-                    #     cv2.imwrite(save_path + '/partition/' + img_name[:-4] + '_B.png', denormalize_x(B_img))
-                    #     cv2.imwrite(save_path + '/partition_gt/' + img_name[:-4] + '_B.png', denormalize_y(B_gt))
-
+                    if epoch == 1 and offset < 24:
+                        cv2.imwrite(save_path + '/partition/' + img_name[:-4] + '_L.png', denormalize_x(L_img))
+                        cv2.imwrite(save_path + '/partition_gt/' + img_name[:-4] + '_L.png', denormalize_y(L_gt))
+                        cv2.imwrite(save_path + '/partition/' + img_name[:-4] + '_R.png', denormalize_x(R_img))
+                        cv2.imwrite(save_path + '/partition_gt/' + img_name[:-4] + '_R.png', denormalize_y(R_gt))
+                        cv2.imwrite(save_path + '/partition/' + img_name[:-4] + '_B.png', denormalize_x(B_img))
+                        cv2.imwrite(save_path + '/partition_gt/' + img_name[:-4] + '_B.png', denormalize_y(B_gt))
 
                 # full image
                 else:
@@ -530,8 +528,8 @@ def train(sc_train_samples, sf_train_samples, test_samples, cross_val_folder):
                                 partition=True)
 
     # load validating samples  // image_type: 0-image, 1-gt
-    x_val = load_images(test_samples, image_type=0, image_size=IMAGE_SIZE, partition=True)
-    y_val = load_images(test_samples, image_type=1, image_size=IMAGE_SIZE, partition=True)
+    x_val = load_images(test_samples, image_type=0, input_size=IMAGE_SIZE, partition=True)
+    y_val = load_images(test_samples, image_type=1, input_size=IMAGE_SIZE, partition=True)
 
     print('#train = ' + str(3*len(sc_train_samples)))
     print('#validate = ' + str(len(x_val)))
@@ -586,8 +584,8 @@ def predict(test_samples, cross_val_folder):
     import cv2
 
     # testData
-    X_test = load_images(test_samples, image_type=0, image_size=IMAGE_SIZE, partition=True)
-    Y_true = load_images(test_samples, image_type=1, image_size=IMAGE_SIZE, partition=False)
+    X_test = load_images(test_samples, image_type=0, input_size=IMAGE_SIZE, partition=True)
+    Y_true = load_images(test_samples, image_type=1, input_size=IMAGE_SIZE, partition=False)
 
     # define U-Net parameters
     input_channel_count = cfg.model_params['input_channel']
@@ -605,17 +603,21 @@ def predict(test_samples, cross_val_folder):
     y_pred = model.predict(X_test, BATCH_SIZE)
 
     # combine y_pred
-    n = 0
-    y_pred = y_pred[:, :, :, 0]
-    full_Y_pred = np.zeros((round(len(y_pred)/3), 1024, 1024), np.float32)
-    for offset in range(0, len(y_pred), 3):
-        partitions = y_pred[offset:offset + 3]
-        full_img = cv2.imread(IMAGE_DIR + os.sep + test_samples[n][0])
-        full_KUB_map = cv2.resize(cv2.imread(KUB_MAP_DIR + os.sep + test_samples[n][0][:- 4] + '.png'), (full_img.shape[1], full_img.shape[0]))
-        full_Y_pred_combine = combine_KUB_partitions(partitions[0], partitions[1], partitions[2], full_KUB_map)
-        # full_Y_pred_combine = combine_KUB_partitions_old(partitions[0], partitions[1], partitions[2])
-        full_Y_pred[n] = cv2.resize(full_Y_pred_combine, (1024, 1024))
-        n += 1
+    partitions = True
+    if partitions:
+        n = 0
+        y_pred = y_pred[:, :, :, 0]
+        full_Y_pred = np.zeros((round(len(y_pred)/3), 1024, 1024), np.float32)
+        for offset in range(0, len(y_pred), 3):
+            partitions = y_pred[offset:offset + 3]
+            full_img = cv2.imread(IMAGE_DIR + os.sep + test_samples[n][0])
+            full_KUB_map = cv2.resize(cv2.imread(KUB_MAP_DIR + os.sep + test_samples[n][0][:- 4] + '.png'), (full_img.shape[1], full_img.shape[0]))
+            full_Y_pred_combine = combine_KUB_partitions(partitions[0], partitions[1], partitions[2], full_KUB_map)
+            # full_Y_pred_combine = combine_KUB_partitions_old(partitions[0], partitions[1], partitions[2])
+            full_Y_pred[n] = cv2.resize(full_Y_pred_combine, (1024, 1024))
+            n += 1
+    else:
+        full_Y_pred = y_pred[:, :, :, 0]
 
     evaluation_results_pixel = {'image_name': [],
                                 'total_stones': [],
@@ -637,12 +639,6 @@ def predict(test_samples, cross_val_folder):
                           'F1': [],
                           'F2': []}
 
-    # stone_results = {'stone_name': [],
-    #                  'stone_type': [],
-    #                  '(x,y)': [],
-    #                  '(w,h)': [],
-    #                  'stone_size': [],
-    #                  'detect': []}
     stone_results = {'stone_name': [],
                      '(x,y)': [],
                      '(w,h)': [],
@@ -711,11 +707,9 @@ def predict(test_samples, cross_val_folder):
                                                         evaluate_regionbased[2],
                                                         evaluate_regionbased[3])[3])
 
-
         # STONE DATA
         for i in range(len(stone_data)):
             stone_results['stone_name'].append(image_name + '_' + stone_data[i][0])
-            #stone_results['stone_type'].append(stone_data[i][1])
             stone_results['(x,y)'].append((stone_data[i][1], stone_data[i][2]))
             stone_results['(w,h)'].append((stone_data[i][3], stone_data[i][4]))
             stone_results['stone_size'].append(stone_data[i][5])
@@ -744,21 +738,11 @@ def predict(test_samples, cross_val_folder):
                                                                  'recall', 'precision', 'F1', 'F2'])
     data_pixel.to_excel(save_path + '/evaluation_pixelbased.xlsx', index=None, header=True)
 
-
     data1 = pd.DataFrame(evaluation_results, columns=['image_name',
                                                       'total_stones',
                                                       'TP', 'FN', 'FP',
                                                       'recall', 'precision', 'F1', 'F2'])
-                                                      # 'kidney_stones',
-                                                      # 'k_TP', 'k_FP', 'k_FN',
-                                                      # 'k_recall', 'k_precision', 'k_F1', 'k_F2',
-                                                      # 'ureter_stones',
-                                                      # 'u_TP', 'u_FP', 'u_FN',
-                                                      # 'u_recall', 'u_precision', 'u_F1', 'u_F2',
-                                                      # 'bladder_stones',
-                                                      # 'b_TP', 'b_FP', 'b_FN',
-                                                      # 'b_recall', 'b_precision', 'b_F1', 'b_F2',
-                                                      # ])
+
     data1.to_excel(save_path + '/evaluation_regionbased.xlsx', index=None, header=True)
 
     data2 = pd.DataFrame(stone_results, columns=['stone_name',
@@ -833,6 +817,7 @@ if __name__ == '__main__':
             # training U-net  (validation set in training is only sc dataset)
             print('########## Training ###########')
             train(sc_train_samples, sf_train_samples, sc_test_samples, cross_val_folder)
+
             # testing
             print('########## Testing ###########')
             predict(test_samples, cross_val_folder)
