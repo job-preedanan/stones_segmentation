@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 
-def find_KUB_bounding_box(full_KUB_map, border_size=50):
+def find_KUB_bounding_box(full_KUB_map, border_size=80):
 
     # KUB map preprocessing
     full_KUB_map = cv2.cvtColor(full_KUB_map, cv2.COLOR_BGR2GRAY)
@@ -14,11 +14,12 @@ def find_KUB_bounding_box(full_KUB_map, border_size=50):
     cnt_tmp = cv2.findContours(full_KUB_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     contour = cnt_tmp[0] if len(cnt_tmp) == 2 else cnt_tmp[1]
     x, y, w, h = cv2.boundingRect(contour[0])    # parameters for L and R partitions
+
     # expand bb
     x_top = max(0, x - border_size)
     w_top = min(w + 2*border_size, full_KUB_map.shape[1] - x_top)
     y_top = max(0, y - border_size)
-    h_top = round(h/2) + border_size
+    h_top = round(h/2) + 2*border_size
 
     # find bladder partition
     low_img_map = full_KUB_map.copy()
@@ -59,12 +60,12 @@ def create_KUB_partitions(full_image, full_KUB_map):
 
     # left partition
     L_partition = full_image[y_top:y_top+h_top, x_top:x_top+round(w_top/2)]
-    # cv2.imshow('Left partition', L_partition)
-    # cv2.waitKey(0)
+
     # right partition
     R_partition = full_image[y_top:y_top+h_top, x_top+round(w_top/2):x_top+w_top]
     # cv2.imshow('Right partition', R_partition)
     # cv2.waitKey(0)
+
     # bottom partition
     B_partition = full_image[y_low:y_low+h_low, x_low:x_low+w_low]
     # cv2.imshow('Bladder partition', B_partition)
@@ -131,12 +132,21 @@ if __name__ == '__main__':
     import random
 
     IMAGE_SIZE = 1024
-    full_image = cv2.resize(cv2.imread('data/3004155.jpg', cv2.IMREAD_GRAYSCALE), (900, 1024))
+    full_image = cv2.resize(cv2.imread('data/all_images/T008.jpg', cv2.IMREAD_GRAYSCALE), (1024, 1024))
     full_image = cv2.resize(full_image, (round(full_image.shape[1] / (full_image.shape[0] / 512)), 512))
-    full_KUB_map = cv2.resize(cv2.imread('data/3004155.png'), (full_image.shape[1], full_image.shape[0]))
+    full_KUB_map = cv2.resize(cv2.imread('data/Full_KUB_map/T008.png'), (full_image.shape[1], full_image.shape[0]))
 
     L_partition, R_partition, B_partition = create_KUB_partitions(full_image, full_KUB_map)
     L_partition = cv2.resize(L_partition, (256, 256))
     R_partition = cv2.resize(R_partition, (256, 256))
     B_partition = cv2.resize(B_partition, (256, 256))
-    full_image = combine_KUB_partitions(L_partition, R_partition, B_partition, full_KUB_map)
+
+    cv2.imshow('Left partition', L_partition)
+    cv2.waitKey(0)
+
+    cv2.imshow('Right partition', R_partition)
+    cv2.waitKey(0)
+
+    cv2.imshow('Bot partition', B_partition)
+    cv2.waitKey(0)
+    #full_image = combine_KUB_partitions(L_partition, R_partition, B_partition, full_KUB_map)
