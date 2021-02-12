@@ -58,7 +58,7 @@ def tversky_loss(beta, gamma):
         denominator = K.sum(y_true * y_pred) + (1 - beta) * K.sum((1 - y_true) * y_pred) + beta * K.sum(y_true * (1 - y_pred))
         loss_value = (intersection + 1) / (denominator + 1)
 
-        return 1.0 - K.pow(loss_value, (1/gamma))
+        return K.pow(1.0 - loss_value, (1/gamma))
 
     return loss
 
@@ -116,7 +116,6 @@ def binary_focal_loss(gamma=2., alpha=.25):
         return loss
 
     return binary_focal_loss_fixed
-
 
 
 # ------------------------------ CE + DL -----------------------------
