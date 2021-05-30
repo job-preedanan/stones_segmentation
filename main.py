@@ -5,6 +5,7 @@ import cv2
 import os
 import pandas as pd
 from myUnet import UNet
+# from pretrained_Unet import get_pretrained_unet
 from stone_augment import stone_embedding
 from segmentation_evaluate import segmentation_evaluate_full, metrics_compute
 from KUB_partitions_function import create_KUB_partitions, combine_KUB_partitions
@@ -355,18 +356,21 @@ def generator(sc_samples, sf_samples, batch_size, datagen_methods, shuffle_data,
 
                     # L partition
                     l_img = cv2.resize(utils.normalize_x(l_img), (IMAGE_SIZE, IMAGE_SIZE))  # [-1,1]
+                    # x_train[3 * i] = np.repeat(l_img[:, :, np.newaxis], 3, axis=-1)
                     x_train[3 * i] = l_img[:, :, np.newaxis]
                     l_gt = cv2.resize(utils.normalize_y(l_gt), (IMAGE_SIZE, IMAGE_SIZE))    # [0,1]
                     y_train[3 * i, :, :, 0] = l_gt
 
                     # R partition
                     r_img = cv2.resize(utils.normalize_x(r_img), (IMAGE_SIZE, IMAGE_SIZE))  # [-1,1]
+                    # x_train[3 * i + 1] = np.repeat(r_img[:, :, np.newaxis], 3, axis=-1)
                     x_train[3 * i + 1] = r_img[:, :, np.newaxis]
                     r_gt = cv2.resize(utils.normalize_y(r_gt), (IMAGE_SIZE, IMAGE_SIZE))    # [0,1]
                     y_train[3 * i + 1, :, :, 0] = r_gt
 
                     # B partition
                     b_img = cv2.resize(utils.normalize_x(b_img), (IMAGE_SIZE, IMAGE_SIZE))  # [-1,1]
+                    # x_train[3 * i + 2] = np.repeat(b_img[:, :, np.newaxis], 3, axis=-1)
                     x_train[3 * i + 2] = b_img[:, :, np.newaxis]
                     b_gt = cv2.resize(utils.normalize_y(b_gt), (IMAGE_SIZE, IMAGE_SIZE))  # [0,1]
                     y_train[3 * i + 2, :, :, 0] = b_gt
@@ -533,7 +537,7 @@ def train(train_samples, val_samples):
                                   callbacks=[model_checkpoint_callback, es, lr_reduce_callback],
                                   validation_data=(x_val, y_val))
 
-    model.save_weights(SAVE_PATH + '/model_weights2.hdf5')
+    model.save_weights(SAVE_PATH + '/model_weights.hdf5')
 
     # save graphs
     if cfg.exp_params['save_graphs']:
@@ -560,8 +564,9 @@ def predict(test_samples):
                    cfg.model_params['output_channel'],
                    cfg.model_params['first_layer_filters'])
     model = network.get_model()
+    # model = get_pretrained_unet(IMAGE_SIZE, IMAGE_SIZE, 3, 1)
 
-    model.load_weights(SAVE_PATH + '/model_weights2.hdf5')
+    model.load_weights(SAVE_PATH + '/unet_weights.hdf5')
 
     # predict
     y_pred = model.predict(x_test, batch_size=16)
@@ -583,7 +588,7 @@ def predict(test_samples):
     return full_y_pred
 
 
-def evaluate_results(test_samples, all_y_pred):
+def evaluate_results(test_samples, all_y_pred, k_fold_num):
 
     all_y_true = load_images(test_samples,
                              image_type=1,
@@ -614,6 +619,7 @@ def evaluate_results(test_samples, all_y_pred):
                      '(x,y)': [],
                      '(w,h)': [],
                      'stone_size': [],
+                     'stone_type': [],
                      'detect': []}
 
     sc_num = 0     # for counting sc images
@@ -624,6 +630,10 @@ def evaluate_results(test_samples, all_y_pred):
         # read org image
         img = cv2.imread(IMAGE_DIR + os.sep + test_samples[i][0])
         img = cv2.resize(img, (FULL_IMAGE_SIZE, FULL_IMAGE_SIZE))    # 1024 * 1024
+
+        # read KUB map
+        kub_map = cv2.imread(KUB_MAP_DIR + os.sep + test_samples[i][0][:-4] + '.png')
+        kub_map = cv2.resize(kub_map, (FULL_IMAGE_SIZE, FULL_IMAGE_SIZE))    # 1024 * 1024
 
         # predicted image
         y_pred = cv2.resize(y_pred, (img.shape[1], img.shape[0]))
@@ -637,7 +647,7 @@ def evaluate_results(test_samples, all_y_pred):
         y_true = np.array(y_true, dtype=np.uint8)
 
         # evaluation function
-        evaluate_pixelbased, evaluate_regionbased, stone_data = segmentation_evaluate_full(y_pred, y_true)
+        evaluate_pixelbased, evaluate_regionbased, stone_data = segmentation_evaluate_full(y_pred, y_true, kub_map)
 
         # collecting results
         evaluation_results_pixel['image_name'].append(image_name)
@@ -683,7 +693,8 @@ def evaluate_results(test_samples, all_y_pred):
             stone_results['(x,y)'].append((stone_data[i][1], stone_data[i][2]))
             stone_results['(w,h)'].append((stone_data[i][3], stone_data[i][4]))
             stone_results['stone_size'].append(stone_data[i][5])
-            stone_results['detect'].append(stone_data[i][6])
+            stone_results['stone_type'].append(stone_data[i][6])
+            stone_results['detect'].append(stone_data[i][7])
 
         # heat map generate
         heatmap /= np.max(heatmap)
@@ -709,20 +720,20 @@ def evaluate_results(test_samples, all_y_pred):
                                                                       'total_stones',
                                                                       'TP', 'FN', 'FP',
                                                                       'recall', 'precision', 'F1', 'F2'])
-        excel_pixel.to_excel(SAVE_PATH + '/evaluation_pixelbased2.xlsx', index=None, header=True)
+        # excel_pixel.to_excel(SAVE_PATH + '/evaluation_pixelbased.xlsx', index=None, header=True)
 
         # save region-based results
         excel_region = pd.DataFrame(evaluation_results, columns=['image_name',
                                                                  'total_stones',
                                                                  'TP', 'FN', 'FP',
                                                                  'recall', 'precision', 'F1', 'F2'])
-        excel_region.to_excel(SAVE_PATH + '/evaluation_regionbased2.xlsx', index=None, header=True)
+        # excel_region.to_excel(SAVE_PATH + '/evaluation_regionbased.xlsx', index=None, header=True)
 
         # save stone results
         excel_stone = pd.DataFrame(stone_results, columns=['stone_name',
                                                            '(x,y)', '(w,h)',
-                                                           'stone_size', 'detect'])
-        excel_stone.to_excel(SAVE_PATH + '/stone_results2.xlsx', index=None, header=True)
+                                                           'stone_size', 'stone_type', 'detect'])
+        excel_stone.to_excel(SAVE_PATH + '/stone_results(' + str(k_fold_num+1) +').xlsx', index=None, header=True)
 
 
 if __name__ == '__main__':
@@ -776,22 +787,20 @@ if __name__ == '__main__':
             print('#test = ' + str(len(sc_test_samples + sf_test_samples)))
 
             # training U-net  (validation set in training is only sc dataset)
+            print('########## Training ###########')
+            train([sc_train_samples, sf_train_samples], sc_test_samples)
 
-            if i == 3:
-                print('########## Training ###########')
-                train([sc_train_samples, sf_train_samples], sc_test_samples)
+            # testing
+            print('########## Testing ###########')
+            y_pred = predict(sc_test_samples + sf_test_samples)
 
-                # testing
-                print('########## Testing ###########')
-                y_pred = predict(sc_test_samples + sf_test_samples)
-
-                # evaluate
-                print('######### Evaluation ###########')
-                evaluate_results(sc_test_samples + sf_test_samples, y_pred)
+            # evaluate
+            print('######### Evaluation ###########')
+            evaluate_results(sc_test_samples + sf_test_samples, y_pred, i)
 
             # sc and sf list moving
-            sc_list = utils.list_index_move(sc_list, split_num=cfg.exp_params['val_split'])
-            sf_list = utils.list_index_move(sf_list, split_num=cfg.exp_params['val_split'])
+            sc_list = utils.list_index_move(sc_list, split_num=cfg.exp_params['test_split'])
+            sf_list = utils.list_index_move(sf_list, split_num=cfg.exp_params['test_split'])
 
     # simple train/val/test
     else:

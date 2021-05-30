@@ -60,10 +60,11 @@ def pixelbased_metric(y_true, y_pred, binary_th=0.5):
     return TP, FP, FN
 
 
-def regionbased_metric(y_true, y_pred, binary_th=0.5, overlap_th=0.5):
+def regionbased_metric(y_true, y_pred, kub_map, binary_th=0.5, overlap_th=0.5):
 
     _, y_true = cv2.threshold(y_true, binary_th*255, 255, cv2.THRESH_BINARY)
     _, y_pred = cv2.threshold(y_pred, binary_th*255, 255, cv2.THRESH_BINARY)
+    # _, kub_map = cv2.threshold(kub_map, binary_th * 255, 255, cv2.THRESH_BINARY)
 
     # post processing
     #y_pred = post_processing(y_pred)
@@ -81,22 +82,32 @@ def regionbased_metric(y_true, y_pred, binary_th=0.5, overlap_th=0.5):
     TP = 0
     FN = 0
     total_stones = len(y_true_contours)
-    stone_data = [[0 for x in range(6)] for y in range(total_stones)]      # stone location(x,y), (w,h), size, detect?
+    stone_data = [[0 for x in range(7)] for y in range(total_stones)]      # stone location(x,y), (w,h), size, region, detect?
+
     for i, true_cnt in enumerate(y_true_contours):
         tmp_true_cnt = np.zeros(y_true.shape, np.uint8)
         cv2.drawContours(tmp_true_cnt, [true_cnt], -1, 255, -1)
 
         # stone properties
         x, y, w, h = cv2.boundingRect(true_cnt)
-        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 3)
-        # cv2.imshow('stone_gt', img)
-        # cv2.waitKey(0)
+        # cv2.rectangle(img, (x, y), (x+w, y+h), (255, 255, 0), 3)
+
+        # find stone type
+        if kub_map[y + round(h/2), x + round(w/2), 2] == 255:           #
+            stone_type = 1
+        elif kub_map[y + round(h/2), x + round(w/2), 1] == 255:
+            stone_type = 2
+        elif kub_map[y + round(h/2), x + round(w/2), 0] == 255:
+            stone_type = 3
+        else:
+            stone_type = 0
 
         stone_data[i][0] = x + round(w/2)
         stone_data[i][1] = y + round(h/2)
         stone_data[i][2] = w
         stone_data[i][3] = h
         stone_data[i][4] = cv2.contourArea(true_cnt)
+        stone_data[i][5] = stone_type
 
         # intersect [pixel-based TP]
         pixel_TP = np.sum(np.logical_and(tmp_true_cnt == 255, y_pred == 255))
@@ -105,10 +116,10 @@ def regionbased_metric(y_true, y_pred, binary_th=0.5, overlap_th=0.5):
 
         if overlap_ratio >= overlap_th:
             TP = TP + 1
-            stone_data[i][5] = True
+            stone_data[i][6] = True
         elif overlap_ratio < overlap_th:
             FN = FN + 1
-            stone_data[i][5] = False
+            stone_data[i][6] = False
 
     # ---------------------------- check predicted contours --------------------------------------------------------
     FP = 0
@@ -127,9 +138,9 @@ def regionbased_metric(y_true, y_pred, binary_th=0.5, overlap_th=0.5):
     return TP, FP, FN, total_stones, stone_data
 
 
-def segmentation_evaluate_full(y_pred, y_true):
+def segmentation_evaluate_full(y_pred, y_true, kub_map):
     p_TP, p_FP, p_FN = pixelbased_metric(y_true, y_pred)
-    TP, FP, FN, total_stones, stone_results = regionbased_metric(y_true, y_pred)
+    TP, FP, FN, total_stones, stone_results = regionbased_metric(y_true, y_pred, kub_map)
 
     # evaluation by each image (pixel based)
     evaluate_pixelbased = [0 for x in range(4)]
@@ -146,10 +157,10 @@ def segmentation_evaluate_full(y_pred, y_true):
     evaluate_regionbased[3] = FP
 
     # evaluation by each stone
-    stone_data = [[0 for x in range(7)] for y in range(total_stones)]
+    stone_data = [[0 for x in range(8)] for y in range(total_stones)]
     for i in range(total_stones):
         stone_data[i][0] = 'stone_' + str(i)
-        stone_data[i][1:7] = stone_results[i]
+        stone_data[i][1:8] = stone_results[i]
 
     return evaluate_pixelbased, evaluate_regionbased, stone_data
 
@@ -255,34 +266,15 @@ if __name__ == '__main__':
     y_pred = cv2.resize(cv2.imread('16181956_Result.png', cv2.IMREAD_GRAYSCALE), (1024, 1024))
     y_true = cv2.resize(cv2.imread('16181956L.png', cv2.IMREAD_GRAYSCALE), (1024, 1024))
     KUB_map = cv2.resize(cv2.imread('16181956.png'), (1024, 1024))
-    evaluated_data, stone_data = segmentation_evaluate(y_pred, y_true, KUB_map)
-
-    # KIDNEYS STONE EVALUATION
-    evaluation_results['image_name'].append(image_name)
-    evaluation_results['kidney_stones'].append(evaluated_data[0])
-    evaluation_results['k_TP'].append(evaluated_data[1])
-    evaluation_results['k_FP'].append(evaluated_data[2])
-    evaluation_results['k_FN'].append(evaluated_data[3])
-
-    # URETER STONE EVALUATION
-    evaluation_results['ureter_stones'].append(evaluated_data[4])
-    evaluation_results['u_TP'].append(evaluated_data[5])
-    evaluation_results['u_FP'].append(evaluated_data[6])
-    evaluation_results['u_FN'].append(evaluated_data[7])
-
-    # BLADDER STONE EVALUATION
-    evaluation_results['bladder_stones'].append(evaluated_data[8])
-    evaluation_results['b_TP'].append(evaluated_data[9])
-    evaluation_results['b_FP'].append(evaluated_data[10])
-    evaluation_results['b_FN'].append(evaluated_data[11])
+    _, _, stone_data = segmentation_evaluate_full(y_pred, y_true, KUB_map)
 
     # STONE DATA
     for i in range(len(stone_data)):
         stone_results['stone_name'].append(image_name + '_' + stone_data[i][0])
-        stone_results['stone_type'].append(stone_data[i][1])
-        stone_results['(x,y)'].append((stone_data[i][2], stone_data[i][3]))
-        stone_results['(w,h)'].append((stone_data[i][4], stone_data[i][5]))
-        stone_results['stone_size'].append(stone_data[i][6])
+        stone_results['(x,y)'].append((stone_data[i][1], stone_data[i][2]))
+        stone_results['(w,h)'].append((stone_data[i][3], stone_data[i][4]))
+        stone_results['stone_size'].append(stone_data[i][5])
+        stone_results['stone_type'].append(stone_data[i][6])
         stone_results['detect'].append(stone_data[i][7])
 
     print(stone_results)
